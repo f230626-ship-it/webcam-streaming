@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Viewer - Remote Stream</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    h1 { margin-bottom: 10px; }
+    .subtitle { color: #aaa; margin-bottom: 20px; }
+    .container { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    #remoteVideo { width: 640px; height: 480px; background: #000; border-radius: 8px; object-fit: cover; }
+    .status { padding: 10px 20px; border-radius: 20px; font-weight: bold; }
+    .status.connected { background: #2ecc71; color: #000; }
+    .status.disconnected { background: #e74c3c; }
+    .status.waiting { background: #f39c12; color: #000; }
+    .info { margin-top: 20px; padding: 15px; background: #16213e; border-radius: 8px; max-width: 640px; }
+    .info h3 { margin-bottom: 10px; color: #3498db; }
+    .info p { font-size: 14px; line-height: 1.6; }
+    .indicator { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.active { background: #2ecc71; animation: pulse 1s infinite; }
+    .dot.inactive { background: #555; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  </style>
+</head>
+<body>
+  <h1>Viewer</h1>
+  <p class="subtitle">This device receives the live stream from the capture client</p>
+  <div class="container">
+    <video id="remoteVideo" autoplay muted playsinline></video>
+    <div id="status" class="status waiting">Waiting for stream...</div>
+    <div class="indicator">
+      <div id="videoDot" class="dot inactive"></div>
+      <span id="videoLabel">Video: Not connected</span>
+    </div>
+    <div class="indicator">
+      <div id="audioDot" class="dot inactive"></div>
+      <span id="audioLabel">Audio: Not connected</span>
+    </div>
+    <div class="info">
+      <h3>Security Indicators Observed During Testing</h3>
+      <p><strong>OS-level (macOS):</strong> When the capture client activates the camera, a green dot appears in the menu bar (top-right). When the microphone is active, an orange dot appears next to it. These are OS-level indicators that appear regardless of which browser or application accesses the camera/mic.</p>
+      <p><strong>Browser-level:</strong> Safari/Chrome show a camera icon in the tab or address bar when the site has active camera access. A green dot appears in the tab itself.</p>
+      <p><strong>Hardware-level:</strong> The green LED next to the camera lens on the MacBook illuminates when the camera sensor is powered on. This is hardwired to the camera power supply and cannot be disabled via software.</p>
+      <p style="margin-top: 10px;"><strong>Conclusion:</strong> All three indicator levels (OS, browser, hardware) were active during testing on macOS with Safari.</p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let peerConnection;
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    socket.on('connect', () => {
+      socket.emit('join', 'viewer');
+      document.getElementById('status').textContent = 'Connected - waiting for stream...';
+      document.getElementById('status').className = 'status waiting';
+    });
+
+    socket.on('offer', async (data) => {
+      peerConnection = new RTCPeerConnection(config);
+
+      peerConnection.ontrack = (event) => {
+        const remoteVideo = document.getElementById('remoteVideo');
+        const stream = event.streams[0];
+        remoteVideo.srcObject = stream;
+
+        remoteVideo.onloadedmetadata = () => {
+          remoteVideo.play();
+        };
+
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
+
+        document.getElementById('status').textContent = 'Stream received!';
+        document.getElementById('status').className = 'status connected';
+
+        if (videoTrack) {
+          document.getElementById('videoDot').className = 'dot active';
+          document.getElementById('videoLabel').textContent = 'Video: Active (' + videoTrack.label + ')';
+        }
+        if (audioTrack) {
+          document.getElementById('audioDot').className = 'dot active';
+          document.getElementById('audioLabel').textContent = 'Audio: Active (' + audioTrack.label + ')';
+        }
+      };
+
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('candidate', event.candidate);
+        }
+      };
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+      socket.emit('answer', answer);
+    });
+
+    socket.on('candidate', async (data) => {
+      if (peerConnection) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+      }
+    });
+  </script>
+</body>
+</html>

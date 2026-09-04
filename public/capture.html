@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capture Client - Webcam & Microphone</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background: #1a1a2e; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+    h1 { margin-bottom: 10px; }
+    .subtitle { color: #aaa; margin-bottom: 20px; }
+    .container { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    #localVideo { width: 400px; height: 300px; background: #000; border-radius: 8px; }
+    .status { padding: 10px 20px; border-radius: 20px; font-weight: bold; }
+    .status.connected { background: #2ecc71; color: #000; }
+    .status.disconnected { background: #e74c3c; }
+    .status.capturing { background: #3498db; }
+    .status.waiting { background: #f39c12; color: #000; }
+    button { padding: 12px 24px; font-size: 16px; border: none; border-radius: 8px; cursor: pointer; background: #3498db; color: #fff; }
+    button:hover { background: #2980b9; }
+    button:disabled { background: #555; cursor: not-allowed; }
+    .info { margin-top: 20px; padding: 15px; background: #16213e; border-radius: 8px; max-width: 500px; }
+    .info h3 { margin-bottom: 10px; color: #f39c12; }
+    .info p { font-size: 14px; line-height: 1.6; }
+    .info ul { margin-top: 10px; padding-left: 20px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Capture Client</h1>
+  <p class="subtitle">This device captures webcam + microphone and streams to the viewer</p>
+  <div class="container">
+    <video id="localVideo" autoplay muted playsinline></video>
+    <div id="status" class="status disconnected">Disconnected</div>
+    <button id="startBtn" onclick="startCapture()">Start Capture</button>
+    <div class="info">
+      <h3>What Happens When You Click Start:</h3>
+      <p>1. Browser calls <code>getUserMedia()</code> to access camera + mic</p>
+      <p>2. Browser shows a <strong>permission prompt</strong> (you must allow it)</p>
+      <p>3. WebRTC peer connection is established via signaling server</p>
+      <p>4. Media streams directly to the viewer (peer-to-peer, not via server)</p>
+      <h3 style="margin-top: 15px;">Security Indicators to Watch:</h3>
+      <ul>
+        <li><strong>Browser:</strong> Green camera dot in tab, address bar icon</li>
+        <li><strong>OS (macOS):</strong> Green/orange dot in top menu bar</li>
+        <li><strong>Hardware:</strong> Green LED next to camera lens</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let localStream;
+    let peerConnection;
+    let viewerReady = false;
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    socket.on('connect', () => {
+      socket.emit('join', 'capture');
+    });
+
+    socket.on('viewer-ready', async () => {
+      viewerReady = true;
+      if (peerConnection) {
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        socket.emit('offer', offer);
+        document.getElementById('status').textContent = 'Sending stream to viewer...';
+      }
+    });
+
+    socket.on('answer', async (data) => {
+      if (peerConnection) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(data));
+        document.getElementById('status').textContent = 'Connected - streaming!';
+        document.getElementById('status').className = 'status connected';
+      }
+    });
+
+    socket.on('candidate', async (data) => {
+      if (peerConnection) {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+      }
+    });
+
+    async function startCapture() {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = 'Requesting media (expect permission prompt)...';
+      statusEl.className = 'status capturing';
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 },
+          audio: true
+        });
+
+        document.getElementById('localVideo').srcObject = localStream;
+        document.getElementById('startBtn').disabled = true;
+
+        peerConnection = new RTCPeerConnection(config);
+        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+        peerConnection.onicecandidate = (event) => {
+          if (event.candidate) {
+            socket.emit('candidate', event.candidate);
+          }
+        };
+
+        statusEl.textContent = 'Media captured - ready';
+
+        if (viewerReady) {
+          const offer = await peerConnection.createOffer();
+          await peerConnection.setLocalDescription(offer);
+          socket.emit('offer', offer);
+          statusEl.textContent = 'Sending stream to viewer...';
+        } else {
+          statusEl.textContent = 'Media captured - waiting for viewer...';
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        statusEl.textContent = 'Error: ' + err.message;
+        statusEl.className = 'status disconnected';
+      }
+    }
+  </script>
+</body>
+</html>

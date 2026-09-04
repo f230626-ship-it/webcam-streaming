@@ -1,0 +1,13 @@
+{
+  "name": "webcam-microphone-security-exercise",
+  "version": "1.0.0",
+  "description": "Webcam and Microphone Security Setup Exercise",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}

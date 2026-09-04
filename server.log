@@ -1,0 +1,25 @@
+============================================================
+WEBCAM STREAMING SERVER
+============================================================
+
+For SAME machine (both tabs on this laptop):
+  Capture: http://localhost:3000/capture.html
+  Viewer:  http://localhost:3000/viewer.html
+
+For TWO DIFFERENT devices (phone/laptop + this laptop):
+  Capture: http://192.168.12.1:3000/capture.html
+  Viewer:  http://192.168.12.1:3000/viewer.html
+
+Both devices must be on the same WiFi network.
+============================================================
+Client connected: II790SkiWxQ7sW5mAAAA
+viewer joined: II790SkiWxQ7sW5mAAAA
+Client disconnected: II790SkiWxQ7sW5mAAAA
+Client connected: -lFVpPmdNiACzW-7AAAB
+viewer joined: -lFVpPmdNiACzW-7AAAB
+Client disconnected: -lFVpPmdNiACzW-7AAAB
+Client connected: b9Xx-kkINpTCPiocAAAC
+viewer joined: b9Xx-kkINpTCPiocAAAC
+Client disconnected: b9Xx-kkINpTCPiocAAAC
+Client connected: 5pnCzkLvNz8ASAZrAAAD
+capture joined: 5pnCzkLvNz8ASAZrAAAD
